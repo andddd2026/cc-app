@@ -1,6 +1,6 @@
 // Fa funzionare Cru. Counter senza internet: salva i file nel telefono
 // e li usa subito; se c'è rete scarica in sottofondo l'eventuale versione nuova.
-const CACHE = "cru-938f81d423";
+const CACHE = "cru-cdc762cef6";
 const FILES = ["./", "index.html", "app.enc.json", "manifest.webmanifest",
   "apple-touch-icon.png", "icon-192.png", "icon-512.png"];
 
