@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#084948">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -57,7 +57,7 @@
   // Il programma vero (app.enc.json) è cifrato con AES-256-GCM: senza password è illeggibile.
   // La chiave, una volta ricavata dalla password, resta solo in questo telefono (non esportabile).
   "use strict";
-  const BUILD = "41c1783840";
+  const BUILD = "5753964bc7";
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
