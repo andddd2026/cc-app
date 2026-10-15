@@ -2,7 +2,7 @@
 // e li usa subito; se c'è rete scarica in sottofondo l'eventuale versione nuova.
 const CACHE = "cru-938f81d423";
 const FILES = ["./", "index.html", "app.enc.json", "manifest.webmanifest",
-  "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
+  "apple-touch-icon.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
