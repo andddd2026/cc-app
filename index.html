@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#084948">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cru.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Cru. Counter</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+      background: linear-gradient(180deg, #084948, #053332) fixed; color: #f5eedd;
+      display: grid; place-items: center; -webkit-font-smoothing: antialiased;
+    }
+    .lock { width: min(340px, 86vw); text-align: center; opacity: 0; transition: opacity .4s; }
+    .lock.show { opacity: 1; }
+    .logo { font-size: 64px; font-weight: 900; letter-spacing: -1.5px; }
+    .logo i { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #a85fd2; margin-left: 3px; }
+    .sub { font-size: 12px; letter-spacing: 8px; font-weight: 800; color: rgba(245,238,221,.55); margin: 4px 0 36px; }
+    .pad { font-size: 30px; margin-bottom: 10px; }
+    p { color: rgba(245,238,221,.6); font-size: 14px; font-weight: 600; line-height: 1.4; margin: 0 0 18px; }
+    input {
+      width: 100%; box-sizing: border-box; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(245,238,221,.12);
+      background: rgba(48,48,48,.7); color: #f5eedd; font: inherit; font-size: 17px; font-weight: 700; outline: none; text-align: center;
+    }
+    input:focus { border-color: #eabf48; }
+    button {
+      width: 100%; margin-top: 12px; padding: 16px; border: 0; border-radius: 999px; background: #eabf48; color: #303030;
+      font: inherit; font-size: 17px; font-weight: 800; box-shadow: 0 8px 24px rgba(234,191,72,.3);
+    }
+    button:disabled { opacity: .6; }
+    .err { color: #a85fd2; font-weight: 800; font-size: 14px; min-height: 20px; margin-top: 12px; }
+    .shake { animation: shake .4s; }
+    @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+  </style>
+</head>
+<body>
+  <form class="lock" id="lock" autocomplete="off">
+    <div class="logo">Cru<i></i></div>
+    <div class="sub">COUNTER</div>
+    <div class="pad">🔒</div>
+    <p>App riservata. Inserisci la password: su questo iPhone te la chiede solo la prima volta.</p>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" enterkeyhint="go" required>
+    <button id="go" type="submit">Sblocca</button>
+    <div class="err" id="err"></div>
+  </form>
+  <script>
+  // Il programma vero (app.enc.json) è cifrato con AES-256-GCM: senza password è illeggibile.
+  // La chiave, una volta ricavata dalla password, resta solo in questo telefono (non esportabile).
+  "use strict";
+  const BUILD = "938f81d423";
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+  function db() {
+    return new Promise((ok, ko) => {
+      const r = indexedDB.open("cru-lock", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("k");
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => ko(r.error);
+    });
+  }
+  async function kv(mode, fn) {
+    const d = await db();
+    return new Promise((ok, ko) => {
+      const tx = d.transaction("k", mode);
+      const req = fn(tx.objectStore("k"));
+      tx.oncomplete = () => ok(req && req.result);
+      tx.onerror = () => ko(tx.error);
+    });
+  }
+  const getKey = () => kv("readonly", (s) => s.get("key")).catch(() => null);
+  const setKey = (v) => kv("readwrite", (s) => s.put(v, "key")).catch(() => {});
+  const delKey = () => kv("readwrite", (s) => s.delete("key")).catch(() => {});
+  window.cruLock = async () => { await delKey(); location.reload(); };
+
+  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+  async function payload() {
+    const r = await fetch("app.enc.json", { cache: "no-cache" });
+    if (!r.ok) throw new Error("download");
+    return r.json();
+  }
+  async function derive(pw, p) {
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(p.salt), iterations: p.iter, hash: "SHA-256" },
+      base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  }
+  async function open(key, p) {
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(p.iv) }, key, b64(p.ct));
+    return new TextDecoder().decode(plain);
+  }
+  function launch(html) {
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  (async () => {
+    const form = document.getElementById("lock");
+    const err = document.getElementById("err");
+    let p;
+    try { p = await payload(); }
+    catch (_) {
+      form.classList.add("show");
+      err.textContent = "Serve una connessione per la prima apertura.";
+      document.getElementById("go").disabled = true;
+      return;
+    }
+    const saved = await getKey();
+    if (saved && saved.salt === p.salt) {
+      try { return launch(await open(saved.key, p)); } catch (_) { /* chiave vecchia: si richiede la password */ }
+    }
+    form.classList.add("show");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const go = document.getElementById("go");
+      go.disabled = true; go.textContent = "Verifico…"; err.textContent = "";
+      try {
+        const key = await derive(document.getElementById("pw").value, p);
+        const html = await open(key, p);
+        await setKey({ key, salt: p.salt });
+        launch(html);
+      } catch (_) {
+        err.textContent = "Password errata";
+        form.classList.remove("shake"); void form.offsetWidth; form.classList.add("shake");
+        go.disabled = false; go.textContent = "Sblocca";
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
